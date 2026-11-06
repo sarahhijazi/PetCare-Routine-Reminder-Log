@@ -19,7 +19,8 @@ class PetViewModel(application: Application) :
         database,
         database.petDao(),
         database.careTaskDao(),
-        database.activityLogDao()
+        database.activityLogDao(),
+        database.reminderDao()
     )
 
 
@@ -100,5 +101,35 @@ class PetViewModel(application: Application) :
     ): Flow<List<ActivityLog>> {
         return repository.getLogsForPet(petId)
     }
+
+    fun addReminder(
+        careTaskId: Long,
+        reminderDateTime: Long
+    ) {
+        viewModelScope.launch {
+            repository.insertReminder(
+                Reminder(
+                    careTaskId = careTaskId,
+                    reminderDateTime = reminderDateTime
+                )
+            )
+        }
+    }
+
+    fun updateReminder(reminder: Reminder) {
+        viewModelScope.launch {
+            repository.updateReminder(reminder)
+        }
+    }
+
+    fun deleteReminder(reminder: Reminder) {
+        viewModelScope.launch {
+            repository.deleteReminder(reminder)
+        }
+    }
+
+    fun getRemindersForTask(careTaskId: Long): Flow<List<Reminder>> =
+        repository.getRemindersForTask(careTaskId)
+
 
 }

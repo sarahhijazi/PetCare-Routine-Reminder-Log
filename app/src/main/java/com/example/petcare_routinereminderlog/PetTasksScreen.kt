@@ -17,6 +17,7 @@ fun PetTasksScreen(
     onAddTask: () -> Unit,
     onCompleteTask: (CareTask) -> Unit,
     onViewHistory: () -> Unit,
+    onManageReminders: (CareTask) -> Unit,
     onBack: () -> Unit
 ) {
     Column(
@@ -36,12 +37,14 @@ fun PetTasksScreen(
         ) {
             Text("+ Add Care Task")
         }
+
         OutlinedButton(
             onClick = onViewHistory,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("📋 View Activity History")
         }
+
         if (tasks.isEmpty()) {
             Text("No care tasks yet. Add your first task!")
         } else {
@@ -58,8 +61,7 @@ fun PetTasksScreen(
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
-                            verticalArrangement =
-                                Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
                                 text = task.title,
@@ -75,6 +77,15 @@ fun PetTasksScreen(
                                 else
                                     "Status: Pending ⏳"
                             )
+
+                            OutlinedButton(
+                                onClick = {
+                                    onManageReminders(task)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("⏰ Manage Reminders")
+                            }
 
                             Button(
                                 onClick = {

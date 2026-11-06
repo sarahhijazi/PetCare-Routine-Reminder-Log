@@ -1,38 +1,29 @@
 
 package com.example.petcare_routinereminderlog
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.petcare_routinereminderlog.data.Pet
+import com.example.petcare_routinereminderlog.data.CareTask
+import com.example.petcare_routinereminderlog.ui.ReminderScreen
 import kotlinx.coroutines.flow.flowOf
 
 class MainActivity : ComponentActivity() {
@@ -43,6 +34,28 @@ class MainActivity : ComponentActivity() {
         setContent {
 
             val petViewModel: PetViewModel = viewModel()
+
+            // Request notification permission on Android 13 and above
+            val notificationPermissionLauncher =
+                rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestPermission()
+                ) { isGranted ->
+                    // Permission result
+                }
+
+            LaunchedEffect(Unit) {
+                if (
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(
+                        this@MainActivity,
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    notificationPermissionLauncher.launch(
+                        Manifest.permission.POST_NOTIFICATIONS
+                    )
+                }
+            }
 
             // Observe all saved pets
             val pets by petViewModel.allPets
@@ -56,6 +69,11 @@ class MainActivity : ComponentActivity() {
             // Currently selected pet
             var selectedPet by remember {
                 mutableStateOf<Pet?>(null)
+            }
+
+            // Currently selected care task
+            var selectedCareTask by remember {
+                mutableStateOf<CareTask?>(null)
             }
 
             val selectedPetId = selectedPet?.id
@@ -82,6 +100,19 @@ class MainActivity : ComponentActivity() {
                 initialValue = emptyList()
             )
 
+            // Observe reminders for selected care task
+            val selectedCareTaskId = selectedCareTask?.id
+
+            val reminderFlow = remember(selectedCareTaskId) {
+                selectedCareTaskId?.let {
+                    petViewModel.getRemindersForTask(it)
+                } ?: flowOf(emptyList())
+            }
+
+            val reminders by reminderFlow.collectAsStateWithLifecycle(
+                initialValue = emptyList()
+            )
+
             // Screen navigation
             when (currentScreen) {
 
@@ -89,15 +120,12 @@ class MainActivity : ComponentActivity() {
                 "home" -> {
                     PetCareHomeScreen(
                         pets = pets,
-
                         onAddPet = {
                             currentScreen = "addPet"
                         },
-
                         onDeletePet = { pet ->
                             petViewModel.deletePet(pet)
                         },
-
                         onSelectPet = { pet ->
                             selectedPet = pet
                             currentScreen = "tasks"
@@ -126,7 +154,6 @@ class MainActivity : ComponentActivity() {
                                 currentScreen = "home"
                             }
                         },
-
                         onBack = {
                             currentScreen = "home"
                         }
@@ -153,6 +180,11 @@ class MainActivity : ComponentActivity() {
                                 currentScreen = "history"
                             },
 
+                            onManageReminders = { task ->
+                                selectedCareTask = task
+                                currentScreen = "reminders"
+                            },
+
                             onBack = {
                                 currentScreen = "home"
                             }
@@ -167,8 +199,7 @@ class MainActivity : ComponentActivity() {
                         AddCareTaskScreen(
                             petName = pet.name,
 
-                            onSaveTask = {
-                                    title, category, frequency ->
+                            onSaveTask = { title, category, frequency ->
 
                                 petViewModel.addTask(
                                     petId = pet.id,
@@ -194,6 +225,50 @@ class MainActivity : ComponentActivity() {
                         ActivityHistoryScreen(
                             petName = pet.name,
                             logs = historyLogs,
+                            onBack = {
+                                currentScreen = "tasks"
+                            }
+                        )
+                    }
+                }
+
+                // REMINDER SCREEN
+                "reminders" -> {
+                    selectedCareTask?.let { task ->
+
+                        ReminderScreen(
+                            taskTitle = task.title,
+                            reminders = reminders,
+
+                            onAddReminder = { dateTime ->
+
+                                // Save reminder in database
+                                petViewModel.addReminder(
+                                    careTaskId = task.id,
+                                    reminderDateTime = dateTime
+                                )
+
+                                // Schedule notification
+                                ReminderScheduler.scheduleReminder(
+                                    context = this@MainActivity,
+                                    careTaskId = task.id,
+                                    taskTitle = task.title,
+                                    reminderDateTime = dateTime
+                                )
+                            },
+
+                            onDeleteReminder = { reminder ->
+
+                                // Cancel scheduled notification
+                                ReminderScheduler.cancelReminder(
+                                    context = this@MainActivity,
+                                    careTaskId = reminder.careTaskId,
+                                    reminderDateTime = reminder.reminderDateTime
+                                )
+
+                                // Delete reminder from database
+                                petViewModel.deleteReminder(reminder)
+                            },
 
                             onBack = {
                                 currentScreen = "tasks"
@@ -214,7 +289,6 @@ fun PetCareHomeScreen(
     onSelectPet: (Pet) -> Unit
 ) {
 
-    // Pet selected for deletion
     var petToDelete by remember {
         mutableStateOf<Pet?>(null)
     }
@@ -238,9 +312,7 @@ fun PetCareHomeScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = "Your pet's daily care companion"
-            )
+            Text("Your pet's daily care companion")
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -267,8 +339,7 @@ fun PetCareHomeScreen(
             } else {
 
                 LazyColumn(
-                    verticalArrangement =
-                        Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
 
                     items(

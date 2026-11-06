@@ -63,4 +63,30 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+val MIGRATION_3_4 = object : Migration(3, 4) {
 
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `reminders` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `careTaskId` INTEGER NOT NULL,
+                `reminderDateTime` INTEGER NOT NULL,
+                `isActive` INTEGER NOT NULL,
+                FOREIGN KEY(`careTaskId`)
+                    REFERENCES `care_tasks`(`id`)
+                    ON UPDATE NO ACTION
+                    ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS
+            `index_reminders_careTaskId`
+            ON `reminders` (`careTaskId`)
+            """.trimIndent()
+        )
+    }
+}
