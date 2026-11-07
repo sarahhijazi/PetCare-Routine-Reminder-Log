@@ -41,6 +41,7 @@ dependencies {
 
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
     implementation(platform(libs.androidx.compose.bom))
+    implementation("androidx.navigation:navigation-compose:2.9.7")
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.activity.compose)

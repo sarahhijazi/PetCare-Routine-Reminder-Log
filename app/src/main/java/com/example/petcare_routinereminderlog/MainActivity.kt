@@ -1,6 +1,10 @@
 
 package com.example.petcare_routinereminderlog
-
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.ui.unit.dp
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -9,21 +13,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.example.petcare_routinereminderlog.data.Pet
 import com.example.petcare_routinereminderlog.data.CareTask
 import com.example.petcare_routinereminderlog.ui.ReminderScreen
+import com.example.petcare_routinereminderlog.ui.theme.CatFactScreen
 import kotlinx.coroutines.flow.flowOf
 
 class MainActivity : ComponentActivity() {
@@ -33,9 +34,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
 
+            val navController = rememberNavController()
+
             val petViewModel: PetViewModel = viewModel()
 
-            // Request notification permission on Android 13 and above
+            // Request notification permission on Android 13+
             val notificationPermissionLauncher =
                 rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestPermission()
@@ -57,84 +60,51 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Observe all saved pets
             val pets by petViewModel.allPets
                 .collectAsStateWithLifecycle()
 
-            // Current screen
-            var currentScreen by remember {
-                mutableStateOf("home")
-            }
-
-            // Currently selected pet
             var selectedPet by remember {
                 mutableStateOf<Pet?>(null)
             }
 
-            // Currently selected care task
             var selectedCareTask by remember {
                 mutableStateOf<CareTask?>(null)
             }
 
-            val selectedPetId = selectedPet?.id
+            NavHost(
+                navController = navController,
+                startDestination = "home",
+                modifier = Modifier
+            ) {
 
-            // Observe care tasks for selected pet
-            val taskFlow = remember(selectedPetId) {
-                selectedPetId?.let {
-                    petViewModel.getTasksForPet(it)
-                } ?: flowOf(emptyList())
-            }
+                // HOME
+                composable("home") {
 
-            val tasks by taskFlow.collectAsStateWithLifecycle(
-                initialValue = emptyList()
-            )
-
-            // Observe activity history for selected pet
-            val historyFlow = remember(selectedPetId) {
-                selectedPetId?.let {
-                    petViewModel.getActivityHistory(it)
-                } ?: flowOf(emptyList())
-            }
-
-            val historyLogs by historyFlow.collectAsStateWithLifecycle(
-                initialValue = emptyList()
-            )
-
-            // Observe reminders for selected care task
-            val selectedCareTaskId = selectedCareTask?.id
-
-            val reminderFlow = remember(selectedCareTaskId) {
-                selectedCareTaskId?.let {
-                    petViewModel.getRemindersForTask(it)
-                } ?: flowOf(emptyList())
-            }
-
-            val reminders by reminderFlow.collectAsStateWithLifecycle(
-                initialValue = emptyList()
-            )
-
-            // Screen navigation
-            when (currentScreen) {
-
-                // HOME SCREEN
-                "home" -> {
                     PetCareHomeScreen(
                         pets = pets,
+
                         onAddPet = {
-                            currentScreen = "addPet"
+                            navController.navigate("addPet")
                         },
+
                         onDeletePet = { pet ->
                             petViewModel.deletePet(pet)
                         },
+
                         onSelectPet = { pet ->
                             selectedPet = pet
-                            currentScreen = "tasks"
+                            navController.navigate("tasks")
+                        },
+
+                        onOpenCatFacts = {
+                            navController.navigate("catFacts")
                         }
                     )
                 }
 
-                // ADD PET SCREEN
-                "addPet" -> {
+                // ADD PET
+                composable("addPet") {
+
                     AddPetScreen(
                         onSavePet = { name, type, age ->
 
@@ -151,25 +121,35 @@ class MainActivity : ComponentActivity() {
                                     age = validAge
                                 )
 
-                                currentScreen = "home"
+                                navController.popBackStack()
                             }
                         },
+
                         onBack = {
-                            currentScreen = "home"
+                            navController.popBackStack()
                         }
                     )
                 }
 
-                // CARE TASKS SCREEN
-                "tasks" -> {
+                // CARE TASKS
+                composable("tasks") {
+
                     selectedPet?.let { pet ->
+
+                        val taskFlow = remember(pet.id) {
+                            petViewModel.getTasksForPet(pet.id)
+                        }
+
+                        val tasks by taskFlow.collectAsStateWithLifecycle(
+                            initialValue = emptyList()
+                        )
 
                         PetTasksScreen(
                             petName = pet.name,
                             tasks = tasks,
 
                             onAddTask = {
-                                currentScreen = "addTask"
+                                navController.navigate("addTask")
                             },
 
                             onCompleteTask = { task ->
@@ -177,23 +157,24 @@ class MainActivity : ComponentActivity() {
                             },
 
                             onViewHistory = {
-                                currentScreen = "history"
+                                navController.navigate("history")
                             },
 
                             onManageReminders = { task ->
                                 selectedCareTask = task
-                                currentScreen = "reminders"
+                                navController.navigate("reminders")
                             },
 
                             onBack = {
-                                currentScreen = "home"
+                                navController.popBackStack()
                             }
                         )
                     }
                 }
 
-                // ADD CARE TASK SCREEN
-                "addTask" -> {
+                // ADD CARE TASK
+                composable("addTask") {
+
                     selectedPet?.let { pet ->
 
                         AddCareTaskScreen(
@@ -208,33 +189,54 @@ class MainActivity : ComponentActivity() {
                                     frequency = frequency
                                 )
 
-                                currentScreen = "tasks"
+                                navController.popBackStack()
                             },
 
                             onBack = {
-                                currentScreen = "tasks"
+                                navController.popBackStack()
                             }
                         )
                     }
                 }
 
-                // ACTIVITY HISTORY SCREEN
-                "history" -> {
+                // ACTIVITY HISTORY
+                composable("history") {
+
                     selectedPet?.let { pet ->
+
+                        val historyFlow = remember(pet.id) {
+                            petViewModel.getActivityHistory(pet.id)
+                        }
+
+                        val historyLogs by historyFlow
+                            .collectAsStateWithLifecycle(
+                                initialValue = emptyList()
+                            )
 
                         ActivityHistoryScreen(
                             petName = pet.name,
                             logs = historyLogs,
+
                             onBack = {
-                                currentScreen = "tasks"
+                                navController.popBackStack()
                             }
                         )
                     }
                 }
 
-                // REMINDER SCREEN
-                "reminders" -> {
+                // REMINDERS
+                composable("reminders") {
+
                     selectedCareTask?.let { task ->
+
+                        val reminderFlow = remember(task.id) {
+                            petViewModel.getRemindersForTask(task.id)
+                        }
+
+                        val reminders by reminderFlow
+                            .collectAsStateWithLifecycle(
+                                initialValue = emptyList()
+                            )
 
                         ReminderScreen(
                             taskTitle = task.title,
@@ -242,13 +244,11 @@ class MainActivity : ComponentActivity() {
 
                             onAddReminder = { dateTime ->
 
-                                // Save reminder in database
                                 petViewModel.addReminder(
                                     careTaskId = task.id,
                                     reminderDateTime = dateTime
                                 )
 
-                                // Schedule notification
                                 ReminderScheduler.scheduleReminder(
                                     context = this@MainActivity,
                                     careTaskId = task.id,
@@ -259,195 +259,118 @@ class MainActivity : ComponentActivity() {
 
                             onDeleteReminder = { reminder ->
 
-                                // Cancel scheduled notification
                                 ReminderScheduler.cancelReminder(
                                     context = this@MainActivity,
                                     careTaskId = reminder.careTaskId,
                                     reminderDateTime = reminder.reminderDateTime
                                 )
 
-                                // Delete reminder from database
                                 petViewModel.deleteReminder(reminder)
                             },
 
                             onBack = {
-                                currentScreen = "tasks"
+                                navController.popBackStack()
                             }
                         )
                     }
+                }
+
+                // CAT FACTS
+                composable("catFacts") {
+
+                    CatFactScreen(
+                        onBack = {
+                            navController.popBackStack()
+                        }
+                    )
                 }
             }
         }
     }
 }
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PetCareHomeScreen(
     pets: List<Pet>,
     onAddPet: () -> Unit,
     onDeletePet: (Pet) -> Unit,
-    onSelectPet: (Pet) -> Unit
+    onSelectPet: (Pet) -> Unit,
+    onOpenCatFacts: () -> Unit
 ) {
+    androidx.compose.material3.Scaffold(
+        topBar = {
+            androidx.compose.material3.TopAppBar(
+                title = { Text("🐾 PetCare") }
+            )
+        }
+    ) { padding ->
 
-    var petToDelete by remember {
-        mutableStateOf<Pet?>(null)
-    }
-
-    Scaffold(
-        modifier = Modifier.fillMaxSize()
-    ) { innerPadding ->
-
-        Column(
+        androidx.compose.foundation.lazy.LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(20.dp)
+                .padding(padding)
+                .padding(16.dp)
         ) {
 
-            Text(
-                text = "🐾 PetCare",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold
-            )
+            item {
+                Text(
+                    text = "Your Pets, Your Care!",
+                    style = androidx.compose.material3.MaterialTheme.typography.headlineSmall
+                )
 
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Text("Your pet's daily care companion")
+                Button(
+                    onClick = onAddPet,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Add a Pet")
+                }
 
-            Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-            Button(
-                onClick = onAddPet,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Add a Pet")
+                Button(
+                    onClick = onOpenCatFacts,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Discover Cat Facts 🐱")
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Text(
+                    text = "My Pets",
+                    style = androidx.compose.material3.MaterialTheme.typography.titleLarge
+                )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            items(pets) { pet ->
 
-            Text(
-                text = "My Pets",
-                style = MaterialTheme.typography.titleLarge
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (pets.isEmpty()) {
-
-                Text("No pets added yet.")
-
-            } else {
-
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    onClick = { onSelectPet(pet) }
                 ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = pet.name,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium
+                        )
 
-                    items(
-                        items = pets,
-                        key = { it.id }
-                    ) { pet ->
+                        Text("Type: ${pet.type}")
+                        Text("Age: ${pet.age}")
 
-                        Card(
-                            onClick = {
-                                onSelectPet(pet)
-                            },
-                            modifier = Modifier.fillMaxWidth()
+                        TextButton(
+                            onClick = { onDeletePet(pet) }
                         ) {
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-
-                                verticalAlignment =
-                                    Alignment.CenterVertically,
-
-                                horizontalArrangement =
-                                    Arrangement.SpaceBetween
-                            ) {
-
-                                Column(
-                                    modifier = Modifier.weight(1f)
-                                ) {
-
-                                    Text(
-                                        text = pet.name,
-                                        style =
-                                            MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-
-                                    Text(
-                                        text = "${pet.type} • ${pet.age} years"
-                                    )
-
-                                    Spacer(
-                                        modifier = Modifier.height(4.dp)
-                                    )
-
-                                    Text(
-                                        text = "Tap to view care tasks",
-                                        style =
-                                            MaterialTheme.typography.bodySmall,
-                                        color =
-                                            MaterialTheme.colorScheme.primary
-                                    )
-                                }
-
-                                TextButton(
-                                    onClick = {
-                                        petToDelete = pet
-                                    }
-                                ) {
-                                    Text("Delete")
-                                }
-                            }
+                            Text("Delete Pet")
                         }
                     }
                 }
             }
         }
-    }
-
-    // Delete confirmation dialog
-    petToDelete?.let { pet ->
-
-        AlertDialog(
-            onDismissRequest = {
-                petToDelete = null
-            },
-
-            title = {
-                Text("Delete ${pet.name}?")
-            },
-
-            text = {
-                Text(
-                    "This will permanently delete this pet, " +
-                            "their care tasks, and activity history."
-                )
-            },
-
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDeletePet(pet)
-                        petToDelete = null
-                    }
-                ) {
-                    Text("Delete")
-                }
-            },
-
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        petToDelete = null
-                    }
-                ) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 }
